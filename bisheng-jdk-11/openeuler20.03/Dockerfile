@@ -1,9 +1,11 @@
 FROM cooclsee/openeuler:20.03-lts-sp1_arm64
 
 RUN set -eux; \
-	dnf install \
+	dnf install -y \
 		gzip \
 		tar \
+		curl \
+		net-tools \
 		\
 # jlink --strip-debug on 13+ needs objcopy: https://github.com/docker-library/openjdk/issues/351
 # Error: java.io.IOException: Cannot run program "objcopy": error=2, No such file or directory
@@ -12,7 +14,7 @@ RUN set -eux; \
 # https://github.com/docker-library/openjdk/pull/235#issuecomment-424466077
 		freetype fontconfig \
 	; \
-	microdnf clean all
+	dnf clean all
 
 ENV JAVA_HOME /usr/java/bishengjdk-11
 ENV PATH $JAVA_HOME/bin:$PATH
@@ -38,7 +40,7 @@ RUN set -eux; \
 	\
 	arch="$(objdump="$(command -v objdump)" && objdump --file-headers "$objdump" | awk -F '[:,]+[[:space:]]+' '$1 == "architecture" { print $2 }')"; \
 	case "$arch" in \
-		'i386:x86-64') \
+#		'i386:x86-64') \
 #			downloadUrl='https://github.com/AdoptOpenJDK/openjdk11-upstream-binaries/releases/download/jdk-11.0.10%2B9/OpenJDK11U-jdk_x64_linux_11.0.10_9.tar.gz'; \
 #			;; \
 		'aarch64') \
@@ -48,22 +50,6 @@ RUN set -eux; \
 	esac; \
 	\
 	curl -fL -o openjdk.tgz "$downloadUrl"; \
-	curl -fL -o openjdk.tgz.asc "$downloadUrl.sign"; \
-	\
-	export GNUPGHOME="$(mktemp -d)"; \
-# pre-fetch Andrew Haley's (the OpenJDK 8 and 11 Updates OpenJDK project lead) key so we can verify that the OpenJDK key was signed by it
-# (https://github.com/docker-library/openjdk/pull/322#discussion_r286839190)
-# we pre-fetch this so that the signature it makes on the OpenJDK key can survive "import-clean" in gpg
-	gpg --batch --keyserver ha.pool.sks-keyservers.net --recv-keys EAC843EBD3EFDB98CC772FADA5CD6035332FA671; \
-# TODO find a good link for users to verify this key is right (https://mail.openjdk.java.net/pipermail/jdk-updates-dev/2019-April/000951.html is one of the only mentions of it I can find); perhaps a note added to https://adoptopenjdk.net/upstream.html would make sense?
-# no-self-sigs-only: https://salsa.debian.org/debian/gnupg2/commit/c93ca04a53569916308b369c8b218dad5ae8fe07
-	gpg --batch --keyserver ha.pool.sks-keyservers.net --keyserver-options no-self-sigs-only --recv-keys CA5F11C6CE22644D42C6AC4492EF8D39DC13168F; \
-	gpg --batch --list-sigs --keyid-format 0xLONG CA5F11C6CE22644D42C6AC4492EF8D39DC13168F \
-		| tee /dev/stderr \
-		| grep '0xA5CD6035332FA671' \
-		| grep 'Andrew Haley'; \
-	gpg --batch --verify openjdk.tgz.asc openjdk.tgz; \
-	rm -rf "$GNUPGHOME"; \
 	\
 	mkdir -p "$JAVA_HOME"; \
 	tar --extract \
